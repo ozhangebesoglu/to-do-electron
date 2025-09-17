@@ -1,6 +1,6 @@
 # Günlük To-Do & Pomodoro Uygulaması
 
-![License](https://img.shields.io/badge/license-MIT-b97723.svg)
+![License](https://img.shields.io/badge/license-MIT-b97723.svg) ![Release](https://img.shields.io/github/v/release/ozhangebesoglu/to-do-electron)
 
 Modern Electron + React tabanlı günlük görev yöneticisi. Görev başına banner (resim/video), notlar (metin veya işaretlenebilir maddeler), Pomodoro zamanlayıcı, öncelik, son tarih ve kapsamlı kısayol desteği içerir. Tek koyu (siyah + kahve) tema.
 
@@ -84,6 +84,29 @@ Sadece geliştirme için (hot build + electron):
 ```powershell
 npm run dev
 ```
+
+## Release (GitHub Releases)
+
+1. `package.json` sürümünü artır (semver).
+2. Commit & tag:
+	```powershell
+	git add package.json
+	git commit -m "chore: bump version to vX.Y.Z"
+	git tag vX.Y.Z
+	git push origin main --tags
+	```
+3. Derle:
+	```powershell
+	npm run dist
+	```
+4. GitHub > Releases > Draft new release
+	- Tag: `vX.Y.Z`
+	- Title: `vX.Y.Z`
+	- Değişiklik listesi (Added / Fixed / Changed)
+	- `dist/` içindeki `.exe` ve `.zip` dosyalarını ekle
+5. Publish.
+
+İleride otomasyon için GitHub Actions ile `electron-builder --publish onTag` eklenebilir.
 
 ## Yol Haritası (Gelecek Fikirleri)
 - Etiket / kategori desteği
