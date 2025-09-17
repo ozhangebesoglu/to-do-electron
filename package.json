@@ -1,0 +1,53 @@
+{
+  "name": "to-doapp",
+  "version": "1.0.1",
+  "description": "Günlük başlıklı ve not eklenebilir Electron to-do uygulaması (React arayüz).",
+  "main": "main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm:watch\" \"npm:start-electron\"",
+    "watch": "node build.mjs --watch",
+    "build:renderer": "node build.mjs",
+    "build": "npm run build:renderer",
+    "dist": "npm run build:renderer && electron-builder",
+    "start-electron": "electron .",
+    "start": "npm run build:renderer && electron ."
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "esbuild": "^0.23.0",
+    "concurrently": "^8.2.2",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.gunluk.gorevler",
+    "productName": "GunlukGorevler",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "index.html",
+      "dist/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "extraMetadata": {
+      "main": "main.cjs"
+    },
+    "win": {
+      "target": ["nsis","zip"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
