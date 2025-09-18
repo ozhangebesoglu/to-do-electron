@@ -1,6 +1,6 @@
 {
   "name": "to-doapp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Günlük başlıklı ve not eklenebilir Electron to-do uygulaması (React arayüz).",
   "main": "main.cjs",
   "type": "module",

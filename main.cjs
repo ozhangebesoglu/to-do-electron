@@ -130,14 +130,14 @@ ipcMain.handle('get-todos', (event, workspace=defaultWorkspace(), dateKey=null) 
   return list;
 });
 
-ipcMain.handle('add-todo', (event, title, banner=null, workspace=defaultWorkspace()) => {
+ipcMain.handle('add-todo', (event, title, banner=null, workspace=defaultWorkspace(), dateKey=null) => {
   const data = migrateStructure(readTodos());
   const wsData = getWorkspaceData(data, workspace);
-  const today = getTodayKey();
-  if (!wsData[today]) wsData[today] = [];
-  wsData[today].push({ title, notes: [], banner, bannerOffset:0, completed:false, priority:'med', dueDate:null, tags:[], archived:false, workspace });
+  const targetDate = dateKey || getTodayKey();
+  if (!wsData[targetDate]) wsData[targetDate] = [];
+  wsData[targetDate].push({ title, notes: [], banner, bannerOffset:0, completed:false, priority:'med', dueDate:null, tags:[], archived:false, workspace });
   writeTodos(data);
-  return wsData[today];
+  return wsData[targetDate];
 });
 
 ipcMain.handle('add-note', (event, todoIndex, noteObj, workspace=defaultWorkspace(), dateKey=null) => {

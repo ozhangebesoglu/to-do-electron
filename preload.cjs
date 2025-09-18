@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('api', {
   listWorkspaces: () => ipcRenderer.invoke('list-workspaces'),
   listDays: (workspace) => ipcRenderer.invoke('list-days', workspace),
   getTodos: (workspace, dateKey) => ipcRenderer.invoke('get-todos', workspace, dateKey),
-  addTodo: (title, banner=null, workspace) => ipcRenderer.invoke('add-todo', title, banner, workspace),
+  addTodo: (title, banner=null, workspace, dateKey=null) => ipcRenderer.invoke('add-todo', title, banner, workspace, dateKey),
   addNote: (todoIndex, noteObj, workspace, dateKey) => ipcRenderer.invoke('add-note', todoIndex, noteObj, workspace, dateKey),
   toggleNote: (todoIndex, noteIndex, workspace, dateKey) => ipcRenderer.invoke('toggle-note', todoIndex, noteIndex, workspace, dateKey),
   deleteNote: (todoIndex, noteIndex, workspace, dateKey) => ipcRenderer.invoke('delete-note', todoIndex, noteIndex, workspace, dateKey),

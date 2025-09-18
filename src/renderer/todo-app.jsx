@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import TargetCursor from './TargetCursor';
+import Calendar from './Calendar';
+import ThemeToggle from './ThemeToggle';
 
 function classNames(...c){return c.filter(Boolean).join(' ')}
 
@@ -93,7 +95,7 @@ const PomodoroClock = React.forwardRef(function PomodoroClock({ durations, setDu
   );
 });
 
-function NoteDetail({ todo, index, back, refresh }){
+function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey = null }){
   const [note,setNote]=useState('');
   const [noteType,setNoteType]=useState('text'); // 'text' | 'task'
   const [saving,setSaving]=useState(false);
@@ -224,9 +226,9 @@ function NoteDetail({ todo, index, back, refresh }){
         <div style={{display:'flex',flexDirection:'column',gap:4}}>
           <div style={{display:'flex',flexWrap:'wrap',gap:4,alignItems:'center',maxWidth:240}}>
             {(todo.tags||[]).map((tg,i)=>(
-              <span key={tg+i} style={{background:'#1d2633',padding:'2px 6px',borderRadius:6,fontSize:'.55rem',display:'flex',alignItems:'center',gap:4}}>
+              <span key={tg+i} className="tag-item">
                 #{tg}
-                <button className="btn xs" style={{fontSize:8,padding:'0 4px'}} onClick={async ()=>{
+                <button className="tag-remove-btn" onClick={async ()=>{
                   const next = (todo.tags||[]).filter(t=>t!==tg);
                   await window.api.setTags(index,next,null,null);
                   await refresh();
@@ -262,7 +264,7 @@ function NoteDetail({ todo, index, back, refresh }){
                   <input type="checkbox" className="note-check" checked={!!n.done} onChange={()=>toggleTask(i)} />
                 )}
                 <span className="note-text" style={{flex:1}}>{n.text || n}</span>
-                <button className="btn xs" style={{background:'#331d1d',borderColor:'#442626'}} onClick={()=>deleteNote(i)}>Sil</button>
+                <button className="btn xs cursor-target " onClick={()=>deleteNote(i)}>✕</button>
               </li>
             ))}
           </ul>
@@ -309,6 +311,16 @@ export function TodoApp(){
   const [stats,setStats]=useState({ total:0, completed:0, archived:0, todayCompleted:0, last7:[] });
   const [quickOpen,setQuickOpen]=useState(false);
   const [quickTitle,setQuickTitle]=useState('');
+  
+  // Date navigation states
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+  });
+  const [availableDates, setAvailableDates] = useState([]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grouped'
+  
   // Tema sabit: artık state yok
   const [durations,setDurations]=useState(()=>{
     try {return JSON.parse(localStorage.getItem('pomodoro_durations')) || DEFAULT_DURATIONS;} catch {return DEFAULT_DURATIONS;}
@@ -319,14 +331,62 @@ export function TodoApp(){
   async function refreshWorkspaces(){
     try { const list = await window.api.listWorkspaces(); if(Array.isArray(list)&&list.length) setWorkspaces(list); } catch {}
   }
+  
+  async function loadAvailableDates() {
+    try {
+      const dates = await window.api.listDays(activeWs);
+      setAvailableDates(dates);
+    } catch (error) {
+      console.error('Error loading available dates:', error);
+      setAvailableDates([]);
+    }
+  }
+  
   async function load(){
     setLoading(true);
-    const list = await window.api.getTodos(activeWs,null);
+    const list = await window.api.getTodos(activeWs, selectedDate);
     setTodos(list);
     setLoading(false);
   }
+  
+  const isToday = (dateKey) => {
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+    return dateKey === todayKey;
+  };
+  
+  const formatSelectedDate = () => {
+    if (isToday(selectedDate)) return 'Bugün';
+    const [year, month, day] = selectedDate.split('-');
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('tr-TR', { 
+      weekday: 'long',
+      day: 'numeric', 
+      month: 'long',
+      year: 'numeric'
+    });
+  };
+
+  const groupTodos = (todoList) => {
+    if (viewMode === 'list') return [{ title: null, todos: todoList }];
+    
+    const groups = {
+      'Yüksek Öncelik': todoList.filter(t => t.priority === 'high'),
+      'Orta Öncelik': todoList.filter(t => t.priority === 'med'),
+      'Düşük Öncelik': todoList.filter(t => t.priority === 'low')
+    };
+    
+    return Object.entries(groups)
+      .filter(([_, todos]) => todos.length > 0)
+      .map(([title, todos]) => ({ title, todos }));
+  };
   useEffect(()=>{ refreshWorkspaces(); },[]);
-  useEffect(()=>{ localStorage.setItem('active_workspace', activeWs); load(); },[activeWs]);
+  useEffect(()=>{ 
+    localStorage.setItem('active_workspace', activeWs); 
+    loadAvailableDates();
+    load(); 
+  },[activeWs]);
+  useEffect(()=>{ load(); },[selectedDate]);
 
   // Quick capture event
   useEffect(()=>{
@@ -355,15 +415,16 @@ export function TodoApp(){
   async function addTodo(e){
     e.preventDefault();
     if(!title.trim()) return;
-    await window.api.addTodo(title.trim(), newBanner, activeWs);
+    await window.api.addTodo(title.trim(), newBanner, activeWs, selectedDate);
     const newIndex = todos.length; // eklenecek index
     setTitle('');
     setNewBanner(null);
     const parsedTags = tagInput.split(',').map(t=>t.replace(/^#/,'').trim()).filter(Boolean);
     setTagInput('');
     await load();
+    await loadAvailableDates(); // Update available dates
     if(parsedTags.length){
-      await window.api.setTags(newIndex, parsedTags, activeWs, null);
+      await window.api.setTags(newIndex, parsedTags, activeWs, selectedDate);
       await load();
     }
     setDetailIndex(newIndex);
@@ -445,7 +506,82 @@ export function TodoApp(){
             <label style={{display:'flex',gap:4,alignItems:'center',fontSize:'.65rem',cursor:'pointer'}}>
               <input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)} /> Arşivli
             </label>
+            <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
+              <button 
+                className="btn xs" 
+                onClick={() => setShowCalendar(!showCalendar)}
+              >
+                📅 {showCalendar ? 'Gizle' : 'Takvim'}
+              </button>
+            </div>
           </div>
+
+          {/* Date Navigation Bar */}
+          <div className="date-nav-bar">
+            <button 
+              className="btn xs" 
+              onClick={() => {
+                const [year, month, day] = selectedDate.split('-');
+                const date = new Date(year, month - 1, day);
+                date.setDate(date.getDate() - 1);
+                const newDateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+                setSelectedDate(newDateKey);
+              }}
+            >
+              ‹ Önceki Gün
+            </button>
+            <span className={`date-nav-title ${isToday(selectedDate) ? 'is-today' : ''}`}>
+              {formatSelectedDate()}
+            </span>
+            <button 
+              className="btn xs" 
+              onClick={() => {
+                const [year, month, day] = selectedDate.split('-');
+                const date = new Date(year, month - 1, day);
+                date.setDate(date.getDate() + 1);
+                const newDateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+                setSelectedDate(newDateKey);
+              }}
+            >
+              Sonraki Gün ›
+            </button>
+            <button 
+              className="btn xs primary" 
+              onClick={() => {
+                const today = new Date();
+                const todayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+                setSelectedDate(todayKey);
+              }}
+            >
+              Bugün
+            </button>
+          </div>
+
+          {/* Calendar Widget */}
+          {showCalendar && (
+            <Calendar 
+              selectedDate={selectedDate}
+              onDateSelect={setSelectedDate}
+              availableDates={availableDates}
+            />
+          )}
+
+          {/* View Mode Toggle */}
+          <div className="view-mode-toggle">
+            <button 
+              className={`view-mode-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+            >
+              📄 Liste
+            </button>
+            <button 
+              className={`view-mode-btn ${viewMode === 'grouped' ? 'active' : ''}`}
+              onClick={() => setViewMode('grouped')}
+            >
+              📊 Gruplu
+            </button>
+          </div>
+
           <div className="search-bar-wrapper">
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Ara (başlık / not)" className="input search-full cursor-target" />
           </div>
@@ -470,65 +606,89 @@ export function TodoApp(){
       {!inDetail && (
         <div className="list-area">
           {loading ? <div className="loading">Yükleniyor...</div> : (
-            todos.length===0 ? <div className="empty">Bugün için hiç görev yok.</div> : (
-              <ul className="todo-list">
-                {todos.map((t,i)=>({t,i}))
-                  .filter(({t})=>{
-                    if(tagFilters.length){
-                      const lowerTags = (t.tags||[]).map(tt=>tt.toLowerCase());
-                      if(!tagFilters.every(tf=>lowerTags.includes(tf))) return false;
-                    }
-                    const qText = search.replace(/#([\w-]+)/g,'').trim().toLowerCase();
-                    if(!qText) return true;
-                    if(t.title.toLowerCase().includes(qText)) return true;
-                    if(Array.isArray(t.notes) && t.notes.some(n=> (n.text||'').toLowerCase().includes(qText))) return true;
-                    return false;
-                  })
-                  .filter(({t})=> showArchived ? true : !t.archived)
-                  .map(({t,i})=>(
-                  <li key={i} className={classNames('todo-item','card', t.completed && 'completed')}>
-                    <div className="title-row cursor-target" onClick={()=>setDetailIndex(i)} style={{cursor:'pointer',flex:1}}>
-                      <span className="badge">{i+1}</span>
-                      <span className="title-text" style={t.completed? {textDecoration:'line-through',opacity:.6}:undefined}>{t.title}</span>
-                      <span className={classNames('prio', t.priority==='low' && 'low', t.priority==='med' && 'med', t.priority==='high' && 'high')} style={{marginLeft:8}}>{t.priority}</span>
-                      {t.dueDate && <span className={classNames('due', (new Date(t.dueDate) < new Date() && !t.completed) && 'overdue')}>{t.dueDate}</span>}
-                      {t.tags?.length>0 && (
-                        <span style={{display:'flex',gap:4,flexWrap:'wrap',marginLeft:6}}>
-                          {t.tags.slice(0,3).map(tag=> <span key={tag} style={{background:'#1d2633',padding:'2px 6px',borderRadius:6,fontSize:'.55rem',opacity:.8}}>#{tag}</span>)}
-                          {t.tags.length>3 && <span style={{fontSize:'.55rem',opacity:.6}}>+{t.tags.length-3}</span>}
-                        </span>
-                      )}
-                      {t.archived && <span style={{marginLeft:6,fontSize:'.55rem',color:'#888'}}>ARCH</span>}
-                    </div>
-                    <div style={{display:'flex',gap:6}}>
-                      <button className="btn xs cursor-target" onClick={()=>window.api.toggleCompleteTodo(i,activeWs,null).then(load)}>{t.completed? 'Geri Al':'✔'}</button>
-                      <button className="btn xs cursor-target" title={t.archived? 'Arşivden çıkar':'Arşivle'} onClick={()=>window.api.archiveTodo(i,!t.archived,activeWs,null).then(load)}>{t.archived? '⟳':'↓'}</button>
-                      <button className="btn xs cursor-target" onClick={()=>{ if(confirm('Silinsin mi?')) window.api.deleteTodo(i,activeWs,null).then(load); }}>✕</button>
-                    </div>
-                    {t.notes?.length>0 && (
-                      <ul className="notes">
-                        {t.notes.slice(-3).map((n,ni)=>(
-                          <li key={ni} className={classNames('note-line', n.type==='task' && 'note-task', n.type==='task' && n.done && 'done')}>
-                            {n.type==='task' && <span className="mini-check">{n.done? '✓' : '•'}</span>}
-                            <span className="note-text">{n.text || n}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )
+            todos.length===0 ? <div className="empty">{formatSelectedDate()} için hiç görev yok.</div> : (() => {
+              // Filter todos
+              const filteredTodos = todos.map((t,i)=>({t,i}))
+                .filter(({t})=>{
+                  if(tagFilters.length){
+                    const lowerTags = (t.tags||[]).map(tt=>tt.toLowerCase());
+                    if(!tagFilters.every(tf=>lowerTags.includes(tf))) return false;
+                  }
+                  const qText = search.replace(/#([\w-]+)/g,'').trim().toLowerCase();
+                  if(!qText) return true;
+                  if(t.title.toLowerCase().includes(qText)) return true;
+                  if(Array.isArray(t.notes) && t.notes.some(n=> (n.text||'').toLowerCase().includes(qText))) return true;
+                  return false;
+                })
+                .filter(({t})=> showArchived ? true : !t.archived);
+
+              const groups = groupTodos(filteredTodos.map(({t}) => t));
+              
+              return groups.map((group, groupIndex) => (
+                <div key={groupIndex} className="todo-group">
+                  {group.title && (
+                    <h3 className="group-title">
+                      {group.title} ({group.todos.length})
+                    </h3>
+                  )}
+                  <ul className="todo-list">
+                    {group.todos.map((t, todoIndex) => {
+                      const originalIndex = filteredTodos.find(({t: todo}) => todo === t)?.i || 0;
+                      return (
+                        <li key={originalIndex} className={classNames('todo-item','card', t.completed && 'completed')}>
+                          <div className="title-row cursor-target" onClick={()=>setDetailIndex(originalIndex)} style={{cursor:'pointer',flex:1}}>
+                            <span className="badge">{originalIndex+1}</span>
+                            <span className="title-text" style={t.completed? {textDecoration:'line-through',opacity:.6}:undefined}>{t.title}</span>
+                            <span className={classNames('prio', t.priority==='low' && 'low', t.priority==='med' && 'med', t.priority==='high' && 'high')} style={{marginLeft:8}}>{t.priority}</span>
+                            {t.dueDate && <span className={classNames('due', (new Date(t.dueDate) < new Date() && !t.completed) && 'overdue')}>{t.dueDate}</span>}
+                            {t.tags?.length>0 && (
+                              <span style={{display:'flex',gap:4,flexWrap:'wrap',marginLeft:6}}>
+                                {t.tags.slice(0,3).map(tag=> <span key={tag} style={{background:'#1d2633',padding:'2px 6px',borderRadius:6,fontSize:'.55rem',opacity:.8}}>#{tag}</span>)}
+                                {t.tags.length>3 && <span style={{fontSize:'.55rem',opacity:.6}}>+{t.tags.length-3}</span>}
+                              </span>
+                            )}
+                            {t.archived && <span style={{marginLeft:6,fontSize:'.55rem',color:'#888'}}>ARCH</span>}
+                          </div>
+                          <div style={{display:'flex',gap:6}}>
+                            <button className="btn xs cursor-target" onClick={()=>window.api.toggleCompleteTodo(originalIndex,activeWs,selectedDate).then(load)}>{t.completed? 'Geri Al':'✔'}</button>
+                            <button className="btn xs cursor-target" title={t.archived? 'Arşivden çıkar':'Arşivle'} onClick={()=>window.api.archiveTodo(originalIndex,!t.archived,activeWs,selectedDate).then(load)}>{t.archived? '⟳':'↓'}</button>
+                            <button className="btn xs cursor-target" onClick={()=>{ if(confirm('Silinsin mi?')) window.api.deleteTodo(originalIndex,activeWs,selectedDate).then(load); }}>✕</button>
+                          </div>
+                          {t.notes?.length>0 && (
+                            <ul className="notes">
+                              {t.notes.slice(-3).map((n,ni)=>(
+                                <li key={ni} className={classNames('note-line', n.type==='task' && 'note-task', n.type==='task' && n.done && 'done')}>
+                                  {n.type==='task' && <span className="mini-check">{n.done? '✓' : '•'}</span>}
+                                  <span className="note-text">{n.text || n}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ));
+            })()
           )}
         </div>
       )}
       {inDetail && (
         <div className="detail-pane">
-          <NoteDetail todo={todos[detailIndex]} index={detailIndex} back={()=>setDetailIndex(null)} refresh={load} />
+          <NoteDetail 
+            todo={todos[detailIndex]} 
+            index={detailIndex} 
+            back={()=>setDetailIndex(null)} 
+            refresh={load}
+            workspace={activeWs}
+            dateKey={selectedDate}
+          />
         </div>
       )}
       <footer className="app-footer">Yerel olarak kaydedilir • {new Date().toLocaleDateString('tr-TR')}</footer>
-      <div style={{position:'fixed',bottom:4,right:6,fontSize:'.55rem',opacity:.75,background:'#111a24',padding:'6px 10px',borderRadius:8,lineHeight:1.4}}>
+      <ThemeToggle />
+      <div style={{position:'fixed',bottom:4,right:6,fontSize:'.55rem',opacity:.75,background:'var(--input-bg)',border:'1px solid var(--border)',color:'var(--text-dim)',padding:'6px 10px',borderRadius:8,lineHeight:1.4}}>
         <strong>İstatistik</strong><br/>
         Toplam: {stats.total} • Tamamlanan: {stats.completed} • Arşivli: {stats.archived}
       </div>
