@@ -9,7 +9,8 @@
     "watch": "node build.mjs --watch",
     "build:renderer": "node build.mjs",
     "build": "npm run build:renderer",
-    "dist": "npm run build:renderer && electron-builder",
+  "dist": "npm run build:renderer && electron-builder",
+  "release": "npm run build:renderer && electron-builder --publish always",
     "start-electron": "electron .",
     "start": "npm run build:renderer && electron ."
   },
@@ -38,6 +39,13 @@
     "extraMetadata": {
       "main": "main.cjs"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ozhangebesoglu",
+        "repo": "to-do-electron"
+      }
+    ],
     "win": {
       "target": [
         "nsis",
