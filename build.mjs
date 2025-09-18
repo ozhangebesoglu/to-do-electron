@@ -21,7 +21,10 @@ async function run({ watch=false }={}) {
     loader: { '.js':'jsx', '.jsx':'jsx' },
     sourcemap: true,
     minify: false,
-    logLevel: 'info'
+    logLevel: 'info',
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : (process.env.NODE_ENV || 'production'))
+    }
   };
 
   if (watch) {

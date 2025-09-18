@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import TargetCursor from './TargetCursor';
 
 function classNames(...c){return c.filter(Boolean).join(' ')}
 
@@ -102,6 +103,7 @@ function NoteDetail({ todo, index, back, refresh }){
   const [titleDraft,setTitleDraft]=useState(todo.title);
   const [dueDraft,setDueDraft]=useState(todo.dueDate || '');
   const [priority,setPriority]=useState(todo.priority||'med');
+  const [tagDraft,setTagDraft]=useState('');
   const textRef = useRef(null);
   useEffect(()=>{ textRef.current && textRef.current.focus(); },[]);
 
@@ -219,6 +221,24 @@ function NoteDetail({ todo, index, back, refresh }){
           <span className={classNames('prio', priority==='low' && 'low', priority==='med' && 'med', priority==='high' && 'high')}>{priority==='low'?'LOW':'MED'===priority.toUpperCase()? 'MED':'HIGH'}</span>
           <button className="btn xs" onClick={async ()=>{ const next = priority==='low'?'med':priority==='med'?'high':'low'; setPriority(next); await window.api.updateTodo(index,{ priority:next}); await refresh(); }}>Öncelik Döngü</button>
         </div>
+        <div style={{display:'flex',flexDirection:'column',gap:4}}>
+          <div style={{display:'flex',flexWrap:'wrap',gap:4,alignItems:'center',maxWidth:240}}>
+            {(todo.tags||[]).map((tg,i)=>(
+              <span key={tg+i} style={{background:'#1d2633',padding:'2px 6px',borderRadius:6,fontSize:'.55rem',display:'flex',alignItems:'center',gap:4}}>
+                #{tg}
+                <button className="btn xs" style={{fontSize:8,padding:'0 4px'}} onClick={async ()=>{
+                  const next = (todo.tags||[]).filter(t=>t!==tg);
+                  await window.api.setTags(index,next,null,null);
+                  await refresh();
+                }}>×</button>
+              </span>
+            ))}
+          </div>
+          <form onSubmit={async e=>{e.preventDefault(); if(!tagDraft.trim()) return; const cleaned = tagDraft.split(',').map(t=>t.replace(/^#/,'').trim()).filter(Boolean); const merged = Array.from(new Set([...(todo.tags||[]), ...cleaned])); await window.api.setTags(index, merged, null, null); setTagDraft(''); await refresh(); }} style={{display:'flex',gap:4}}>
+            <input value={tagDraft} onChange={e=>setTagDraft(e.target.value)} placeholder="Etiket ekle..." className="input" style={{padding:'4px 6px',fontSize:'.6rem'}} />
+            <button className="btn xs" disabled={!tagDraft.trim()}>Ekle</button>
+          </form>
+        </div>
         <div style={{display:'flex',alignItems:'center',gap:6}}>
           <input type="date" value={dueDraft} onChange={async e=>{ setDueDraft(e.target.value); await window.api.updateTodo(index,{ dueDate:e.target.value || null}); await refresh(); }} className="input" style={{padding:'4px 8px',fontSize:'.7rem'}} />
           {todo.dueDate && <button className="btn xs" onClick={async ()=>{ setDueDraft(''); await window.api.updateTodo(index,{ dueDate:null}); await refresh(); }}>Temizle</button>}
@@ -277,11 +297,18 @@ function NoteDetail({ todo, index, back, refresh }){
 
 export function TodoApp(){
   const [todos,setTodos]=useState([]);
+  const [workspaces,setWorkspaces]=useState(['default']);
+  const [activeWs,setActiveWs]=useState(()=>localStorage.getItem('active_workspace')||'default');
+  const [showArchived,setShowArchived]=useState(false);
+  const [tagInput,setTagInput]=useState('');
   const [title,setTitle]=useState('');
   const [newBanner,setNewBanner]=useState(null);
   const [loading,setLoading]=useState(true);
   const [detailIndex,setDetailIndex]=useState(null);
   const [search,setSearch]=useState('');
+  const [stats,setStats]=useState({ total:0, completed:0, archived:0, todayCompleted:0, last7:[] });
+  const [quickOpen,setQuickOpen]=useState(false);
+  const [quickTitle,setQuickTitle]=useState('');
   // Tema sabit: artık state yok
   const [durations,setDurations]=useState(()=>{
     try {return JSON.parse(localStorage.getItem('pomodoro_durations')) || DEFAULT_DURATIONS;} catch {return DEFAULT_DURATIONS;}
@@ -289,22 +316,56 @@ export function TodoApp(){
   const titleRef = useRef(null);
   const pomoRef = useRef(null);
 
+  async function refreshWorkspaces(){
+    try { const list = await window.api.listWorkspaces(); if(Array.isArray(list)&&list.length) setWorkspaces(list); } catch {}
+  }
   async function load(){
     setLoading(true);
-    const list = await window.api.getTodos();
+    const list = await window.api.getTodos(activeWs,null);
     setTodos(list);
     setLoading(false);
   }
-  useEffect(()=>{load();},[]);
+  useEffect(()=>{ refreshWorkspaces(); },[]);
+  useEffect(()=>{ localStorage.setItem('active_workspace', activeWs); load(); },[activeWs]);
+
+  // Quick capture event
+  useEffect(()=>{
+    if(window.appEvents?.onQuickCapture){
+      window.appEvents.onQuickCapture(()=>{
+        setQuickOpen(true); setTimeout(()=>{ const el=document.getElementById('quick-input'); el&&el.focus(); },10);
+      });
+    }
+  },[]);
+
+  // İstatistik hesapla
+  useEffect(()=>{
+    const total = todos.length;
+    const completed = todos.filter(t=>t.completed).length;
+    const archived = todos.filter(t=>t.archived).length;
+    const todayCompleted = completed; // gün bazlı liste zaten bugün
+    setStats(s=>({...s,total,completed,archived,todayCompleted}));
+  },[todos]);
+
+  // Basit #tag filtreleme (birden çok #etiket AND mantığı)
+  const tagFilters = React.useMemo(()=>{
+    const m = [...search.matchAll(/#([\w-]+)/g)].map(x=>x[1].toLowerCase());
+    return m;
+  },[search]);
 
   async function addTodo(e){
     e.preventDefault();
     if(!title.trim()) return;
-    await window.api.addTodo(title.trim(), newBanner);
+    await window.api.addTodo(title.trim(), newBanner, activeWs);
     const newIndex = todos.length; // eklenecek index
     setTitle('');
     setNewBanner(null);
+    const parsedTags = tagInput.split(',').map(t=>t.replace(/^#/,'').trim()).filter(Boolean);
+    setTagInput('');
     await load();
+    if(parsedTags.length){
+      await window.api.setTags(newIndex, parsedTags, activeWs, null);
+      await load();
+    }
     setDetailIndex(newIndex);
   }
 
@@ -318,21 +379,41 @@ export function TodoApp(){
 
   const inDetail = detailIndex!=null && todos[detailIndex];
 
-  // Global shortcuts
+  // Global shortcuts (e.code tabanlı; farklı klavye düzenlerinde daha sağlam)
   useEffect(()=>{
     function handler(e){
-      if(e.key==='Enter' && !inDetail){
+      const code = e.code; // örn: KeyS, KeyR
+      const ctrl = e.ctrlKey || e.metaKey; // mac uyumu
+      const alt = e.altKey;
+      if(code==='Enter' && !inDetail){
         if(title.trim()) addTodo(e);
-      } else if(e.key==='Escape' && inDetail){
+        return;
+      }
+      if(e.key==='Escape' && inDetail){
         setDetailIndex(null); titleRef.current?.focus();
-      } else if(e.ctrlKey && e.altKey && (e.key==='s' || e.key==='S')){
-        e.preventDefault(); pomoRef.current?.toggle();
-      } else if(e.ctrlKey && e.altKey && (e.key==='r' || e.key==='R')){
-        e.preventDefault(); pomoRef.current?.reset();
-      } else if(e.ctrlKey && e.altKey && (e.key==='k' || e.key==='K')){
+        return;
+      }
+      // Pomodoro start/stop: Ctrl+Alt+S veya Ctrl+Shift+S veya Ctrl+Alt+KeyS
+      if(ctrl && ((alt && code==='KeyS') || (e.shiftKey && code==='KeyS'))){
+        e.preventDefault();
+        pomoRef.current?.toggle();
+        return;
+      }
+      // Pomodoro reset: Ctrl+Alt+R veya Ctrl+Shift+R
+      if(ctrl && ((alt && code==='KeyR') || (e.shiftKey && code==='KeyR'))){
+        e.preventDefault();
+        pomoRef.current?.reset();
+        return;
+      }
+      // Focus title
+      if(ctrl && alt && code==='KeyK'){
         e.preventDefault(); titleRef.current?.focus();
-      } else if(e.ctrlKey && e.altKey && (e.key==='f' || e.key==='F')){
+        return;
+      }
+      // Focus search
+      if(ctrl && alt && code==='KeyF'){
         e.preventDefault(); const searchInput = document.querySelector('input[placeholder="Ara (başlık / not)"]'); searchInput?.focus();
+        return;
       }
     }
     window.addEventListener('keydown', handler);
@@ -341,18 +422,32 @@ export function TodoApp(){
 
   return (
     <div className={classNames('app-shell','column')}>
+  <TargetCursor hideDefaultCursor={true} spinDuration={2} />
       <div className="window-bar" data-drag-region>
         <div className="window-drag" />
         <div className="win-buttons">
-          <button className="win-btn" title="Küçült" onClick={()=>window.windowControls.minimize()}>─</button>
-          <button className="win-btn" title="Büyüt / Geri" onClick={()=>window.windowControls.toggleMaximize()}>▢</button>
-          <button className="win-btn close" title="Kapat" onClick={()=>window.windowControls.close()}>×</button>
+          <button className="win-btn cursor-target" title="Küçült" onClick={()=>window.windowControls.minimize()}>─</button>
+          <button className="win-btn cursor-target" title="Büyüt / Geri" onClick={()=>window.windowControls.toggleMaximize()}>▢</button>
+          <button className="win-btn close cursor-target" title="Kapat" onClick={()=>window.windowControls.close()}>×</button>
         </div>
       </div>
       {!inDetail && (
         <>
+          <div style={{display:'flex',gap:8,alignItems:'center',padding:'4px 8px'}}>
+            <select value={activeWs} onChange={e=>setActiveWs(e.target.value)} className="input" style={{maxWidth:160}}>
+              {workspaces.map(w=> <option key={w} value={w}>{w}</option>)}
+            </select>
+            <button className="btn xs" onClick={()=>{
+              const name = prompt('Yeni workspace adı');
+              if(!name) return; if(workspaces.includes(name)) { setActiveWs(name); return; }
+              setWorkspaces(ws=>[...ws,name]); setActiveWs(name);
+            }}>+ WS</button>
+            <label style={{display:'flex',gap:4,alignItems:'center',fontSize:'.65rem',cursor:'pointer'}}>
+              <input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)} /> Arşivli
+            </label>
+          </div>
           <div className="search-bar-wrapper">
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Ara (başlık / not)" className="input search-full" />
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Ara (başlık / not)" className="input search-full cursor-target" />
           </div>
           <div className="top-row">
             <form onSubmit={addTodo} className={classNames('add-form','compact','card','inline', newBanner && 'with-bg')} style={newBanner? { ['--bg-img']: `url(${newBanner.path})`, backgroundImage:`url(${newBanner.path})`, backgroundSize:'cover', backgroundPosition:'center' }: undefined}>
@@ -362,10 +457,11 @@ export function TodoApp(){
                   <button type="button" className="remove-banner-btn" onClick={removeNewBanner}>×</button>
                 </div>
               ) : (
-                <button type="button" className="btn" onClick={chooseNewBanner}>Banner</button>
+                <button type="button" className="btn cursor-target" onClick={chooseNewBanner}>Banner</button>
               )}
-              <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Yeni görev başlığı" className="input" />
-              <button className="btn primary" disabled={!title.trim()}>Ekle</button>
+              <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Yeni görev başlığı" className="input cursor-target" />
+              <input value={tagInput} onChange={e=>setTagInput(e.target.value)} placeholder="#etiket1, #etiket2" className="input cursor-target" style={{maxWidth:140}} />
+              <button className="btn primary cursor-target" disabled={!title.trim()}>Ekle</button>
             </form>
             <PomodoroClock ref={pomoRef} durations={durations} setDurations={setDurations} />
           </div>
@@ -378,23 +474,36 @@ export function TodoApp(){
               <ul className="todo-list">
                 {todos.map((t,i)=>({t,i}))
                   .filter(({t})=>{
-                    if(!search.trim()) return true;
-                    const q = search.toLowerCase();
-                    if(t.title.toLowerCase().includes(q)) return true;
-                    if(Array.isArray(t.notes) && t.notes.some(n=> (n.text||'').toLowerCase().includes(q))) return true;
+                    if(tagFilters.length){
+                      const lowerTags = (t.tags||[]).map(tt=>tt.toLowerCase());
+                      if(!tagFilters.every(tf=>lowerTags.includes(tf))) return false;
+                    }
+                    const qText = search.replace(/#([\w-]+)/g,'').trim().toLowerCase();
+                    if(!qText) return true;
+                    if(t.title.toLowerCase().includes(qText)) return true;
+                    if(Array.isArray(t.notes) && t.notes.some(n=> (n.text||'').toLowerCase().includes(qText))) return true;
                     return false;
                   })
+                  .filter(({t})=> showArchived ? true : !t.archived)
                   .map(({t,i})=>(
                   <li key={i} className={classNames('todo-item','card', t.completed && 'completed')}>
-                    <div className="title-row" onClick={()=>setDetailIndex(i)} style={{cursor:'pointer',flex:1}}>
+                    <div className="title-row cursor-target" onClick={()=>setDetailIndex(i)} style={{cursor:'pointer',flex:1}}>
                       <span className="badge">{i+1}</span>
                       <span className="title-text" style={t.completed? {textDecoration:'line-through',opacity:.6}:undefined}>{t.title}</span>
                       <span className={classNames('prio', t.priority==='low' && 'low', t.priority==='med' && 'med', t.priority==='high' && 'high')} style={{marginLeft:8}}>{t.priority}</span>
                       {t.dueDate && <span className={classNames('due', (new Date(t.dueDate) < new Date() && !t.completed) && 'overdue')}>{t.dueDate}</span>}
+                      {t.tags?.length>0 && (
+                        <span style={{display:'flex',gap:4,flexWrap:'wrap',marginLeft:6}}>
+                          {t.tags.slice(0,3).map(tag=> <span key={tag} style={{background:'#1d2633',padding:'2px 6px',borderRadius:6,fontSize:'.55rem',opacity:.8}}>#{tag}</span>)}
+                          {t.tags.length>3 && <span style={{fontSize:'.55rem',opacity:.6}}>+{t.tags.length-3}</span>}
+                        </span>
+                      )}
+                      {t.archived && <span style={{marginLeft:6,fontSize:'.55rem',color:'#888'}}>ARCH</span>}
                     </div>
                     <div style={{display:'flex',gap:6}}>
-                      <button className="btn xs" onClick={()=>window.api.toggleCompleteTodo(i).then(load)}>{t.completed? 'Geri Al':'✔'}</button>
-                      <button className="btn xs" onClick={()=>{ if(confirm('Silinsin mi?')) window.api.deleteTodo(i).then(load); }}>✕</button>
+                      <button className="btn xs cursor-target" onClick={()=>window.api.toggleCompleteTodo(i,activeWs,null).then(load)}>{t.completed? 'Geri Al':'✔'}</button>
+                      <button className="btn xs cursor-target" title={t.archived? 'Arşivden çıkar':'Arşivle'} onClick={()=>window.api.archiveTodo(i,!t.archived,activeWs,null).then(load)}>{t.archived? '⟳':'↓'}</button>
+                      <button className="btn xs cursor-target" onClick={()=>{ if(confirm('Silinsin mi?')) window.api.deleteTodo(i,activeWs,null).then(load); }}>✕</button>
                     </div>
                     {t.notes?.length>0 && (
                       <ul className="notes">
@@ -419,6 +528,23 @@ export function TodoApp(){
         </div>
       )}
       <footer className="app-footer">Yerel olarak kaydedilir • {new Date().toLocaleDateString('tr-TR')}</footer>
+      <div style={{position:'fixed',bottom:4,right:6,fontSize:'.55rem',opacity:.75,background:'#111a24',padding:'6px 10px',borderRadius:8,lineHeight:1.4}}>
+        <strong>İstatistik</strong><br/>
+        Toplam: {stats.total} • Tamamlanan: {stats.completed} • Arşivli: {stats.archived}
+      </div>
+      {quickOpen && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={()=>setQuickOpen(false)}>
+          <form onClick={e=>e.stopPropagation()} onSubmit={async e=>{ e.preventDefault(); if(!quickTitle.trim()) return; await window.api.addTodo(quickTitle.trim(), null, activeWs); setQuickTitle(''); setQuickOpen(false); await load(); }} style={{background:'#0d141c',padding:20,border:'1px solid #1e2a36',borderRadius:12,display:'flex',flexDirection:'column',gap:8,minWidth:320}}>
+            <h3 style={{margin:0,fontSize:'0.9rem'}}>Hızlı Görev</h3>
+            <input id="quick-input" value={quickTitle} onChange={e=>setQuickTitle(e.target.value)} placeholder="Görev başlığı" className="input" />
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button type="button" className="btn" onClick={()=>setQuickOpen(false)}>İptal</button>
+              <button className="btn primary" disabled={!quickTitle.trim()}>Ekle</button>
+            </div>
+            <div style={{fontSize:'.55rem',opacity:.6,textAlign:'right'}}>Kısayol: Ctrl+Alt+N</div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

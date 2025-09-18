@@ -1,0 +1,13 @@
+.target-cursor-wrapper { position: fixed; top: 0; left: 0; width: 34px; height: 34px; pointer-events: none; z-index: 9999; --cursor-color: rgba(255,255,255,0.85); --corner-size: 8px; --border-width: 2px; }
+.target-cursor-wrapper .target-cursor-corner { opacity:0; }
+.target-cursor-wrapper.on-target .target-cursor-corner { opacity:1; transition: opacity .08s linear; }
+.target-cursor-dot { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: var(--cursor-color); border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 5px rgba(255,255,255,0.5); }
+.target-cursor-corner { position: absolute; width: var(--corner-size); height: var(--corner-size); border: var(--border-width) solid var(--cursor-color); box-sizing: border-box; border-radius: 2px; filter: drop-shadow(0 0 3px rgba(255,255,255,0.35)); }
+.corner-tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+.corner-tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+.corner-br { bottom: 0; right: 0; border-left: none; border-top: none; }
+.corner-bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+.target-cursor-wrapper, .target-cursor-corner, .target-cursor-dot { mix-blend-mode: difference; }
+body.cursor-hidden, body.cursor-hidden * { cursor: none !important; }
+.cursor-target { position: relative; }
+.cursor-target:focus-visible { outline: 2px solid #b48a5a; outline-offset: 2px; }

@@ -9,9 +9,9 @@ assignees: ''
 Hatanın kısa özeti.
 
 ## Yeniden Üretme Adımları
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Beklenen Davranış
 Ne olmalıydı?
