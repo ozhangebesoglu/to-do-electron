@@ -1,7 +1,8 @@
 {
   "name": "to-doapp",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Günlük başlıklı ve not eklenebilir Electron to-do uygulaması (React arayüz).",
+  "author": "Özhan Gebeşoğlu",
   "main": "main.cjs",
   "type": "module",
   "scripts": {
@@ -24,8 +25,8 @@
     "esbuild": "^0.23.0"
   },
   "build": {
-    "appId": "com.gunluk.gorevler",
-    "productName": "GunlukGorevler",
+    "appId": "com.notlar.gorevler",
+    "productName": "NotlarGorevler",
     "files": [
       "main.cjs",
       "preload.cjs",
@@ -49,9 +50,21 @@
     "win": {
       "target": [
         "nsis",
-        "zip"
+        "zip",
+        "appx"
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.png"
+    },
+    "appx": {
+      "applicationId": "NotlarGorevler",
+      "identityName": "zhanGebeolu.NotlarGorevler",
+      "publisher": "CN=F11853EC-4E1F-450A-969C-4DA09F8AB0AC",
+      "publisherDisplayName": "Özhan Gebeşoğlu",
+      "displayName": "Notlar ve Görevler",
+      "languages": ["tr-TR", "en-US"],
+      "backgroundColor": "#faf8f6",
+      "showNameOnTiles": true,
+      "addAutoLaunchExtension": false
     },
     "nsis": {
       "oneClick": false,

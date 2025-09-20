@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.1 - 2025-09-20
+### Fixed
+- Tarih değiştirirken not ekleme sorunu düzeltildi
+- Not ekleme işlemleri artık doğru tarih verilerine kaydediliyor
+- DateKey parametresi NoteDetail komponentinde doğru şekilde kullanılıyor
+
+## 1.2.0 - 2025-09-18
+### Added
+- Tarih bazlı görev yönetimi sistemi
+- Takvim widget'ı ile kolay tarih navigasyonu
+- Açık tema desteği (krem arka plan, kahve rengi yazılar)
+- Tema geçiş butonu (koyu/açık tema arası geçiş)
+- Günlük bazında görev görüntüleme ve yönetim
+- Mevcut tarihlerin takvimde gösterimi
+- Geliştirilmiş tarih navigasyon bar'ı
+
+### Changed
+- Kullanıcı arayüzü tema sistemi yeniden tasarlandı
+- CSS custom properties ile çift tema desteği
+- localStorage ile tema tercihi kalıcılığı
+
 ## 1.1.0 - 2025-09-18
 ### Added
 - Workspace desteği (çoklu çalışma alanı, seçim & kalıcılık)

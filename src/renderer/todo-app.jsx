@@ -137,7 +137,7 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
     if(!note.trim()) return;
     setSaving(true);
     const payload = noteType==='task' ? { type:'task', text:note.trim(), done:false } : { type:'text', text:note.trim() };
-    await window.api.addNote(index, payload);
+    await window.api.addNote(index, payload, workspace, dateKey);
     setNote('');
     setNoteType('text');
     await refresh();
@@ -146,12 +146,12 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
   }
 
   async function toggleTask(i){
-    await window.api.toggleNote(index, i);
+    await window.api.toggleNote(index, i, workspace, dateKey);
     await refresh();
   }
 
   async function deleteNote(i){
-    await window.api.deleteNote(index, i);
+    await window.api.deleteNote(index, i, workspace, dateKey);
     await refresh();
   }
 
@@ -264,7 +264,7 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
                   <input type="checkbox" className="note-check" checked={!!n.done} onChange={()=>toggleTask(i)} />
                 )}
                 <span className="note-text" style={{flex:1}}>{n.text || n}</span>
-                <button className="btn xs cursor-target " onClick={()=>deleteNote(i)}>✕</button>
+                <button className="btn xs cursor-target" onClick={()=>deleteNote(i)}>✕</button>
               </li>
             ))}
           </ul>
