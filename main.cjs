@@ -53,6 +53,8 @@ function migrateNotesStructure(list){
     if(t.tags===undefined){ t.tags = []; changed = true; }
     if(t.archived===undefined){ t.archived = false; changed = true; }
     if(t.workspace===undefined){ t.workspace = defaultWorkspace(); changed = true; }
+    if(t.recurring===undefined){ t.recurring = null; changed = true; }
+    if(t.subtasks===undefined){ t.subtasks = []; changed = true; }
   });
   return changed;
 }
@@ -71,6 +73,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#050505',
     title: 'Günlük Görevler',
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     frame: false,
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 20, y: 20 },
@@ -130,12 +133,12 @@ ipcMain.handle('get-todos', (event, workspace=defaultWorkspace(), dateKey=null) 
   return list;
 });
 
-ipcMain.handle('add-todo', (event, title, banner=null, workspace=defaultWorkspace(), dateKey=null) => {
+ipcMain.handle('add-todo', (event, title, banner=null, workspace=defaultWorkspace(), dateKey=null, recurring=null) => {
   const data = migrateStructure(readTodos());
   const wsData = getWorkspaceData(data, workspace);
   const targetDate = dateKey || getTodayKey();
   if (!wsData[targetDate]) wsData[targetDate] = [];
-  wsData[targetDate].push({ title, notes: [], banner, bannerOffset:0, completed:false, priority:'med', dueDate:null, tags:[], archived:false, workspace });
+  wsData[targetDate].push({ title, notes: [], banner, bannerOffset:0, completed:false, priority:'med', dueDate:null, tags:[], archived:false, workspace, recurring, subtasks:[] });
   writeTodos(data);
   return wsData[targetDate];
 });
@@ -302,4 +305,172 @@ ipcMain.handle('select-media', async () => {
   const videoExt = ['mp4','webm'];
   const type = videoExt.includes(ext) ? 'video' : 'image';
   return { type, path: filePath };
+});
+
+// Tekrarlayan görevler için helper fonksiyonlar
+function shouldCreateRecurringTask(recurring, lastCreated) {
+  if (!recurring) return false;
+  
+  const today = new Date();
+  const lastDate = lastCreated ? new Date(lastCreated) : null;
+  
+  switch (recurring.type) {
+    case 'daily':
+      return !lastDate || today.toDateString() !== lastDate.toDateString();
+    case 'weekly':
+      if (!lastDate) return true;
+      const daysDiff = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+      return daysDiff >= 7;
+    case 'monthly':
+      if (!lastDate) return true;
+      return today.getMonth() !== lastDate.getMonth() || today.getFullYear() !== lastDate.getFullYear();
+    default:
+      return false;
+  }
+}
+
+function createRecurringTasks() {
+  const data = readTodos();
+  let tasksCreated = false;
+  
+  Object.keys(data.workspaces || {}).forEach(workspace => {
+    const wsData = data.workspaces[workspace];
+    
+    // Her gün için tekrarlayan görevleri kontrol et
+    Object.keys(wsData).forEach(dateKey => {
+      const todos = wsData[dateKey] || [];
+      
+      todos.forEach(todo => {
+        if (todo.recurring && shouldCreateRecurringTask(todo.recurring, todo.lastRecurringCreated)) {
+          const today = getTodayKey();
+          
+          // Bugün için henüz oluşturulmamışsa oluştur
+          if (!wsData[today]) wsData[today] = [];
+          
+          const existingToday = wsData[today].find(t => 
+            t.title === todo.title && t.recurring?.type === todo.recurring.type
+          );
+          
+          if (!existingToday) {
+            const newTask = {
+              ...todo,
+              completed: false,
+              // Tüm içeriği kopyala ama görev durumunu sıfırla
+              notes: todo.notes ? todo.notes.map(note => ({
+                ...note,
+                done: false // Alt görevleri tamamlanmamış olarak işaretle
+              })) : [],
+              subtasks: todo.subtasks ? todo.subtasks.map(subtask => ({
+                ...subtask,
+                completed: false // Alt görevleri tamamlanmamış olarak işaretle
+              })) : [],
+              // Banner ve diğer ayarları kopyala
+              banner: todo.banner ? { ...todo.banner } : null,
+              bannerOffset: todo.bannerOffset || 0,
+              tags: [...(todo.tags || [])],
+              priority: todo.priority,
+              dueDate: todo.dueDate,
+              lastRecurringCreated: new Date().toISOString()
+            };
+            wsData[today].push(newTask);
+            tasksCreated = true;
+          }
+          
+          // Orijinal görevi güncelle
+          todo.lastRecurringCreated = new Date().toISOString();
+        }
+      });
+    });
+  });
+  
+  if (tasksCreated) {
+    writeTodos(data);
+  }
+}
+
+// Tekrarlayan görev oluşturma IPC'leri
+ipcMain.handle('set-recurring', (event, todoIndex, recurring, workspace=defaultWorkspace(), dateKey=null) => {
+  const data = migrateStructure(readTodos());
+  const wsData = getWorkspaceData(data, workspace);
+  const dayKey = dateKey || getTodayKey();
+  
+  if(wsData[dayKey] && wsData[dayKey][todoIndex]){
+    wsData[dayKey][todoIndex].recurring = recurring;
+    writeTodos(data);
+    return wsData[dayKey][todoIndex];
+  }
+  return null;
+});
+
+// Subtask IPC'leri
+ipcMain.handle('add-subtask', (event, todoIndex, subtaskTitle, workspace=defaultWorkspace(), dateKey=null) => {
+  const data = migrateStructure(readTodos());
+  const wsData = getWorkspaceData(data, workspace);
+  const dayKey = dateKey || getTodayKey();
+  
+  if(wsData[dayKey] && wsData[dayKey][todoIndex]){
+    const subtask = {
+      title: subtaskTitle,
+      completed: false,
+      createdAt: new Date().toISOString()
+    };
+    wsData[dayKey][todoIndex].subtasks.push(subtask);
+    writeTodos(data);
+    return wsData[dayKey][todoIndex];
+  }
+  return null;
+});
+
+ipcMain.handle('toggle-subtask', (event, todoIndex, subtaskIndex, workspace=defaultWorkspace(), dateKey=null) => {
+  const data = migrateStructure(readTodos());
+  const wsData = getWorkspaceData(data, workspace);
+  const dayKey = dateKey || getTodayKey();
+  
+  if(wsData[dayKey] && wsData[dayKey][todoIndex] && wsData[dayKey][todoIndex].subtasks[subtaskIndex]){
+    const subtask = wsData[dayKey][todoIndex].subtasks[subtaskIndex];
+    subtask.completed = !subtask.completed;
+    writeTodos(data);
+    return subtask;
+  }
+  return null;
+});
+
+ipcMain.handle('delete-subtask', (event, todoIndex, subtaskIndex, workspace=defaultWorkspace(), dateKey=null) => {
+  const data = migrateStructure(readTodos());
+  const wsData = getWorkspaceData(data, workspace);
+  const dayKey = dateKey || getTodayKey();
+  
+  if(wsData[dayKey] && wsData[dayKey][todoIndex] && wsData[dayKey][todoIndex].subtasks[subtaskIndex] !== undefined){
+    wsData[dayKey][todoIndex].subtasks.splice(subtaskIndex, 1);
+    writeTodos(data);
+    return true;
+  }
+  return false;
+});
+
+// Drag & Drop - Todo reordering
+ipcMain.handle('reorder-todos', (event, fromIndex, toIndex, workspace=defaultWorkspace(), dateKey=null) => {
+  const data = migrateStructure(readTodos());
+  const wsData = getWorkspaceData(data, workspace);
+  const dayKey = dateKey || getTodayKey();
+  
+  if(wsData[dayKey] && wsData[dayKey].length > Math.max(fromIndex, toIndex)){
+    const todos = wsData[dayKey];
+    
+    // Array'den elementi çıkar ve yeni pozisyona yerleştir
+    const [movedTodo] = todos.splice(fromIndex, 1);
+    todos.splice(toIndex, 0, movedTodo);
+    
+    writeTodos(data);
+    return todos;
+  }
+  return null;
+});
+
+// Uygulama başlarken tekrarlayan görevleri kontrol et
+app.whenReady().then(() => {
+  createRecurringTasks();
+  
+  // Her gün tekrarlayan görevleri kontrol et
+  setInterval(createRecurringTasks, 60 * 60 * 1000); // Her saat kontrol et
 });
