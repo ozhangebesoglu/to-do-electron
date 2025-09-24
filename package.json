@@ -1,17 +1,16 @@
 {
   "name": "to-doapp",
-  "version": "1.2.1",
+  "version": "1.3.1",
   "description": "Günlük başlıklı ve not eklenebilir Electron to-do uygulaması (React arayüz).",
-  "author": "Özhan Gebeşoğlu",
+  "author": "Ozhan Gebesoglu",
   "main": "main.cjs",
-  "type": "module",
   "scripts": {
     "dev": "concurrently \"npm:watch\" \"npm:start-electron\"",
     "watch": "node build.mjs --watch",
-    "build:renderer": "node build.mjs",
+    "build:renderer": "node build.mjs --outdir renderer-dist",
     "build": "npm run build:renderer",
-  "dist": "npm run build:renderer && electron-builder",
-  "release": "npm run build:renderer && electron-builder --publish always",
+    "dist": "npm run build:renderer && electron-builder",
+    "release": "npm run build:renderer && electron-builder --publish always",
     "start-electron": "electron .",
     "start": "npm run build:renderer && electron ."
   },
@@ -24,6 +23,11 @@
     "electron-builder": "^24.13.3",
     "esbuild": "^0.23.0"
   },
+  "dependencies": {
+    "gsap": "^3.13.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
   "build": {
     "appId": "com.notlar.gorevler",
     "productName": "NotlarGorevler",
@@ -31,11 +35,13 @@
       "main.cjs",
       "preload.cjs",
       "index.html",
-      "dist/**/*",
+      "dist/renderer.js",
+      "dist/renderer.css",
       "package.json"
     ],
     "directories": {
-      "buildResources": "build"
+      "buildResources": "build",
+      "output": "dist"
     },
     "extraMetadata": {
       "main": "main.cjs"
@@ -48,34 +54,36 @@
       }
     ],
     "win": {
-      "target": [
-        "nsis",
-        "zip",
-        "appx"
-      ],
-      "icon": "build/icon.png"
+      "target": ["nsis", "appx"],
+      "icon": "build/icon.ico",
+      "publisherName": "Ozhan Gebesoglu",
+      "requestedExecutionLevel": "asInvoker",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": true
     },
     "appx": {
       "applicationId": "NotlarGorevler",
-      "identityName": "zhanGebeolu.NotlarGorevler",
+      "identityName": "OzhanGebesoglu.NotlarGorevler",
       "publisher": "CN=F11853EC-4E1F-450A-969C-4DA09F8AB0AC",
-      "publisherDisplayName": "Özhan Gebeşoğlu",
+      "publisherDisplayName": "Ozhan Gebesoglu",
       "displayName": "Notlar ve Görevler",
       "languages": ["tr-TR", "en-US"],
       "backgroundColor": "#faf8f6",
       "showNameOnTiles": true,
-      "addAutoLaunchExtension": false
+      "addAutoLaunchExtension": false,
+      "setBuildNumber": true,
+      "makeappxArgs": ["/l", "/v"]
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowElevation": true,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
-  },
-  "dependencies": {
-    "gsap": "^3.13.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
   }
 }
