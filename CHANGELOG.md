@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.3.1 - 2025-09-22
+### Fixed
+- **Z-index Layer Conflicts**: UI overlapping issues resolved
+  - Quick Open Modal z-index increased to 10000 (above TargetCursor)
+  - Theme Dropdown z-index set to 5000 (prevents drag item conflicts)
+  - Dragging Todo Items z-index set to 3000
+  - Window Bar z-index standardized to 1000
+- **Theme Compatibility**: Detail page theme inconsistency fixed
+  - Notes content background now uses theme variables instead of fixed black
+  - All themes now display correctly in note editing areas
+- **Window Layout**: Body padding adjusted to match window bar height (32px)
+
+### Technical
+- Z-index hierarchy standardization across all UI components
+- CSS theme variable consistency in detail page components
+- Improved UI layering system for better user experience
+
+## 1.3.0 - 2025-09-20
+### Added
+- **Tekrarlayan Görev Sistemi**: Günlük, haftalık, aylık tekrarlayan görevler
+- **Alt Görev (Subtask) Sistemi**: Ana görevler altında checkbox'lı alt görevler
+- **Progress Bar**: Alt görevlerde tamamlanma yüzdesi gösterimi
+- **Recurring Indicator**: Ana listede tekrarlayan görevler için 🔄 göstergesi
+- **Subtask Preview**: Ana listede alt görev ilerlemesi mini preview'ı
+- **Otomatik Görev Oluşturma**: Tekrarlayan görevler otomatik olarak oluşturulur
+- **İkon Sistemi Güncellemesi**: Tüm uygulama ikonları (window, favicon, build) güncellendi
+
+### Enhanced
+- Veri yapısı genişletildi (recurring, subtasks alanları eklendi)
+- Migration sistemi güncellendi
+- IPC API'leri yeni özellikler için genişletildi
+- UI/UX iyileştirmeleri yapıldı
+
+### Technical
+- Yeni IPC handlers: set-recurring, add-subtask, toggle-subtask, delete-subtask
+- CSS stilleri: progress bar, subtask, recurring indicator stilleri
+- Background interval: her saat tekrarlayan görev kontrolü
+
 ## 1.2.1 - 2025-09-20
 ### Fixed
 - Tarih değiştirirken not ekleme sorunu düzeltildi

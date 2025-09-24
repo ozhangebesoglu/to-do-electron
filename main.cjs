@@ -73,7 +73,11 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#050505',
     title: 'Günlük Görevler',
+<<<<<<< HEAD
     icon: path.join(__dirname, 'build', 'icon.ico'),
+=======
+    icon: path.join(__dirname, 'build', 'icon.png'),
+>>>>>>> df40e16 (Fix & Güncelleme)
     frame: false,
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 20, y: 20 },
@@ -473,4 +477,8 @@ app.whenReady().then(() => {
   
   // Her gün tekrarlayan görevleri kontrol et
   setInterval(createRecurringTasks, 60 * 60 * 1000); // Her saat kontrol et
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> df40e16 (Fix & Güncelleme)

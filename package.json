@@ -1,7 +1,11 @@
 {
   "name": "to-doapp",
   "version": "1.3.1",
+<<<<<<< HEAD
   "description": "Günlük başlıklı ve not eklenebilir Electron to-do uygulaması (React arayüz).",
+=======
+  "description": "Gunluk baslikli ve not eklenebilir Electron to-do uygulamasi (React arayüzü).",
+>>>>>>> df40e16 (Fix & Güncelleme)
   "author": "Ozhan Gebesoglu",
   "main": "main.cjs",
   "scripts": {
@@ -44,7 +48,8 @@
       "output": "dist"
     },
     "extraMetadata": {
-      "main": "main.cjs"
+      "main": "main.cjs",
+      "productName": "NotlarGorevler"
     },
     "publish": [
       {
@@ -54,7 +59,14 @@
       }
     ],
     "win": {
+<<<<<<< HEAD
       "target": ["nsis", "appx"],
+=======
+      "target": [
+        "nsis",
+        "appx"
+      ],
+>>>>>>> df40e16 (Fix & Güncelleme)
       "icon": "build/icon.ico",
       "publisherName": "Ozhan Gebesoglu",
       "requestedExecutionLevel": "asInvoker",
@@ -67,12 +79,22 @@
       "publisher": "CN=F11853EC-4E1F-450A-969C-4DA09F8AB0AC",
       "publisherDisplayName": "Ozhan Gebesoglu",
       "displayName": "Notlar ve Görevler",
-      "languages": ["tr-TR", "en-US"],
+      "languages": [
+        "tr-TR",
+        "en-US"
+      ],
       "backgroundColor": "#faf8f6",
       "showNameOnTiles": true,
       "addAutoLaunchExtension": false,
       "setBuildNumber": true,
+<<<<<<< HEAD
       "makeappxArgs": ["/l", "/v"]
+=======
+      "makeappxArgs": [
+        "/l",
+        "/v"
+      ]
+>>>>>>> df40e16 (Fix & Güncelleme)
     },
     "nsis": {
       "oneClick": false,
@@ -81,7 +103,11 @@
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
+<<<<<<< HEAD
       "installerHeaderIcon": "build/icon.ico",
+=======
+      "installerHeaderIcon": "fotolar/256x256.png",
+>>>>>>> df40e16 (Fix & Güncelleme)
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }

@@ -5,6 +5,8 @@
 Modern Electron + React tabanlı günlük görev yöneticisi. Görev başına banner (resim/video), notlar (metin veya işaretlenebilir maddeler), Pomodoro zamanlayıcı, öncelik, son tarih ve kapsamlı kısayol desteği içerir. Tek koyu (siyah + kahve) tema.
 
 ## Özellikler
+- **Tekrarlayan Görevler**: Günlük, haftalık, aylık otomatik görev oluşturma
+- **Alt Görev Sistemi**: Ana görevler altında checkbox'lı subtask'lar + progress bar
 - Günlük görev listesi (tarih otomatik)
 - Görev oluştururken isteğe bağlı banner (resim / video) + ekleme formu arka plan önizlemesi
 - Banner'ı detayda seçme / kaldırma ve görseli sürükleyerek (drag) dikey konum ayarlama (veya Alt+↑/↓)
@@ -13,10 +15,16 @@ Modern Electron + React tabanlı günlük görev yöneticisi. Görev başına ba
 - Görev başlığını detayda çift tıkla hızlı düzenleme (Enter kaydet, Esc iptal)
 - Öncelik (low / med / high) döngüsü ve renkli rozetler
 - Son tarih seçimi (date picker) ve geciken görev için uyarı stili
-- Arama kutusu (başlık + not içi gerçek zamanlı filtre)
+- **Etiket Sistemi**: #hashtag desteği ve gelişmiş filtreleme
+- **Çoklu Workspace**: Farklı projeler için ayrı çalışma alanları
+- **Takvim Widget'ı**: Tarih bazlı navigasyon ve görev görüntüleme
+- **Tema Sistemi**: Koyu/açık tema desteği (localStorage ile kalıcı)
+- Arama kutusu (başlık + not içi gerçek zamanlı filtre + #tag filtreleme)
 - Pomodoro zamanlayıcı (odak / kısa / uzun) ayarlanabilir süreler + localStorage kalıcılığı
+- **Quick Capture**: Global kısayol (Ctrl+Alt+N) ile hızlı görev ekleme
 - Özel frameless pencere + sağ üstte özel pencere kontrol butonları
 - Banner dikey offset ince ayarı (sürükle veya Alt+↑ / Alt+↓)
+- **Arşivleme**: Görevleri gizleme/gösterme sistemi
 - Kalıcı yerel JSON depolama (kullanıcı klasörü)
 
 ## Kurulum & Çalıştırma
@@ -57,7 +65,12 @@ Detay Ekranı Ekstra:
 			"bannerOffset": 0,
 			"completed": false,
 			"priority": "low|med|high",
-			"dueDate": "YYYY-MM-DD" | null
+			"dueDate": "YYYY-MM-DD" | null,
+			"tags": ["tag1", "tag2"],
+			"archived": false,
+			"workspace": "default",
+			"recurring": { "type": "daily|weekly|monthly", "interval": 1, "enabled": true } | null,
+			"subtasks": [ { "text": "...", "done": false } ]
 		}
 	]
 }
