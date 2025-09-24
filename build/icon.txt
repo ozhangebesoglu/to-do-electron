@@ -1,2 +1,0 @@
-Yerine kendi ikonunuzu (256x256) koyun: icon.png / icon.ico oluşturup buraya yerleştirin.
-Geçici placeholder dosyası.

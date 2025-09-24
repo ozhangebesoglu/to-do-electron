@@ -106,8 +106,29 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
   const [dueDraft,setDueDraft]=useState(todo.dueDate || '');
   const [priority,setPriority]=useState(todo.priority||'med');
   const [tagDraft,setTagDraft]=useState('');
+  
+  // Subtask states
+  const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  
+  // Recurring task states
+  const [recurringType, setRecurringType] = useState(todo.recurring?.type || 'none');
+  const [recurringInterval, setRecurringInterval] = useState(todo.recurring?.interval || 1);
+  
   const textRef = useRef(null);
   useEffect(()=>{ textRef.current && textRef.current.focus(); },[]);
+
+  const add = useCallback(async () => {
+    if(!note.trim()) return;
+    setSaving(true);
+    const payload = noteType==='task' ? { type:'task', text:note.trim(), done:false } : { type:'text', text:note.trim() };
+    await window.api.addNote(index, payload, workspace, dateKey);
+    setNote('');
+    setNoteType('text');
+    await refresh();
+    setSaving(false);
+    textRef.current?.focus();
+  }, [note, noteType, index, workspace, dateKey, refresh]);
 
   // Detail specific shortcuts
   useEffect(()=>{
@@ -116,9 +137,9 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
         e.preventDefault();
         add();
       } else if(e.ctrlKey && e.altKey && (e.key==='c' || e.key==='C')){
-        e.preventDefault(); window.api.toggleCompleteTodo(index).then(refresh);
+        e.preventDefault(); window.api.toggleCompleteTodo(index, workspace, dateKey).then(refresh);
       } else if(e.ctrlKey && e.altKey && (e.key==='d' || e.key==='D')){
-        e.preventDefault(); if(confirm('Görev silinsin mi?')) window.api.deleteTodo(index).then(()=>{back(); refresh();});
+        e.preventDefault(); if(confirm('Görev silinsin mi?')) window.api.deleteTodo(index, workspace, dateKey).then(()=>{back(); refresh();});
       } else if(e.ctrlKey && e.altKey && (e.key==='p' || e.key==='P')){
         e.preventDefault(); const next = priority==='low'?'med':priority==='med'?'high':'low'; setPriority(next); window.api.updateTodo(index,{priority:next}).then(refresh);
       } else if(e.ctrlKey && e.altKey && (e.key==='u' || e.key==='U')){
@@ -131,19 +152,7 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
     }
     window.addEventListener('keydown', detailKeys);
     return ()=>window.removeEventListener('keydown', detailKeys);
-  },[add,index,priority,offset,refresh]);
-
-  async function add(){
-    if(!note.trim()) return;
-    setSaving(true);
-    const payload = noteType==='task' ? { type:'task', text:note.trim(), done:false } : { type:'text', text:note.trim() };
-    await window.api.addNote(index, payload, workspace, dateKey);
-    setNote('');
-    setNoteType('text');
-    await refresh();
-    setSaving(false);
-    textRef.current?.focus();
-  }
+  },[add,index,priority,offset,refresh,workspace,dateKey]);
 
   async function toggleTask(i){
     await window.api.toggleNote(index, i, workspace, dateKey);
@@ -152,6 +161,36 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
 
   async function deleteNote(i){
     await window.api.deleteNote(index, i, workspace, dateKey);
+    await refresh();
+  }
+
+  // Subtask functions
+  async function addSubtask(){
+    if(!subtaskTitle.trim()) return;
+    setAddingSubtask(true);
+    await window.api.addSubtask(index, subtaskTitle.trim(), workspace, dateKey);
+    setSubtaskTitle('');
+    setAddingSubtask(false);
+    await refresh();
+  }
+
+  async function toggleSubtask(subtaskIndex){
+    await window.api.toggleSubtask(index, subtaskIndex, workspace, dateKey);
+    await refresh();
+  }
+
+  async function deleteSubtask(subtaskIndex){
+    await window.api.deleteSubtask(index, subtaskIndex, workspace, dateKey);
+    await refresh();
+  }
+
+  // Recurring task functions
+  async function updateRecurring(){
+    const recurring = recurringType === 'none' ? null : {
+      type: recurringType,
+      interval: recurringInterval
+    };
+    await window.api.setRecurring(index, recurring, workspace, dateKey);
     await refresh();
   }
 
@@ -213,8 +252,8 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
           <input value={titleDraft} onChange={e=>setTitleDraft(e.target.value)} onKeyDown={async e=>{ if(e.key==='Enter'){ await window.api.updateTodo(index,{ title:titleDraft.trim()||todo.title}); await refresh(); setEditingTitle(false);} else if(e.key==='Escape'){ setEditingTitle(false); } }} autoFocus className="input" style={{maxWidth:300}} />
         )}
         <div className="spacer" />
-  <button className="btn" onClick={async ()=>{ await window.api.toggleCompleteTodo(index); await refresh(); }}>Tamamla</button>
-  <button className="btn" onClick={async ()=>{ const ok= confirm('Görev silinsin mi?'); if(ok){ await window.api.deleteTodo(index); back(); await refresh(); } }}>Sil</button>
+  <button className="btn" onClick={async ()=>{ await window.api.toggleCompleteTodo(index, workspace, dateKey); await refresh(); }}>Tamamla</button>
+  <button className="btn" onClick={async ()=>{ const ok= confirm('Görev silinsin mi?'); if(ok){ await window.api.deleteTodo(index, workspace, dateKey); back(); await refresh(); } }}>Sil</button>
         <button className="btn" onClick={chooseBanner}>Banner Seç</button>
         {banner && <button className="btn" onClick={removeBanner}>Kaldır</button>}
       </div>
@@ -230,13 +269,13 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
                 #{tg}
                 <button className="tag-remove-btn" onClick={async ()=>{
                   const next = (todo.tags||[]).filter(t=>t!==tg);
-                  await window.api.setTags(index,next,null,null);
+                  await window.api.setTags(index,next,workspace,dateKey);
                   await refresh();
                 }}>×</button>
               </span>
             ))}
           </div>
-          <form onSubmit={async e=>{e.preventDefault(); if(!tagDraft.trim()) return; const cleaned = tagDraft.split(',').map(t=>t.replace(/^#/,'').trim()).filter(Boolean); const merged = Array.from(new Set([...(todo.tags||[]), ...cleaned])); await window.api.setTags(index, merged, null, null); setTagDraft(''); await refresh(); }} style={{display:'flex',gap:4}}>
+          <form onSubmit={async e=>{e.preventDefault(); if(!tagDraft.trim()) return; const cleaned = tagDraft.split(',').map(t=>t.replace(/^#/,'').trim()).filter(Boolean); const merged = Array.from(new Set([...(todo.tags||[]), ...cleaned])); await window.api.setTags(index, merged, workspace, dateKey); setTagDraft(''); await refresh(); }} style={{display:'flex',gap:4}}>
             <input value={tagDraft} onChange={e=>setTagDraft(e.target.value)} placeholder="Etiket ekle..." className="input" style={{padding:'4px 6px',fontSize:'.6rem'}} />
             <button className="btn xs" disabled={!tagDraft.trim()}>Ekle</button>
           </form>
@@ -254,9 +293,132 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
         )}
         {banner && <div style={{position:'absolute',bottom:6,right:10,fontSize:'.6rem',background:'rgba(0,0,0,.45)',padding:'4px 8px',borderRadius:8}}>Sürükleyerek konumlandır (y: {offset})</div>}
       </div>
-      <div className="notes-block card">
-        <h3>Notlar</h3>
-        {todo.notes?.length? (
+      
+      {/* Subtask Section */}
+      <div className="subtasks-block card">
+        <h3>Alt Görevler ({todo.subtasks?.filter(s => s.completed).length || 0}/{todo.subtasks?.length || 0})</h3>
+        {todo.subtasks?.length ? (
+          <div>
+            <div className="subtask-progress" style={{marginBottom: 12}}>
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill" 
+                  style={{
+                    width: `${((todo.subtasks.filter(s => s.completed).length / todo.subtasks.length) * 100)}%`
+                  }}
+                />
+              </div>
+              <span className="progress-text">
+                {Math.round((todo.subtasks.filter(s => s.completed).length / todo.subtasks.length) * 100)}% tamamlandı
+              </span>
+            </div>
+            <ul className="subtasks list">
+              {todo.subtasks.map((subtask, i) => (
+                <li key={i} className={classNames('subtask-line', subtask.completed && 'completed')}>
+                  <input 
+                    type="checkbox" 
+                    className="subtask-check" 
+                    checked={subtask.completed} 
+                    onChange={() => toggleSubtask(i)} 
+                  />
+                  <span className="subtask-text" style={{flex: 1}}>
+                    {subtask.title}
+                  </span>
+                  <button className="btn xs cursor-target" onClick={() => deleteSubtask(i)}>✕</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="empty small">Henüz alt görev yok.</div>
+        )}
+        
+        <div className="subtask-new" style={{marginTop: 16}}>
+          <div style={{display: 'flex', gap: 8}}>
+            <input 
+              value={subtaskTitle} 
+              onChange={e => setSubtaskTitle(e.target.value)}
+              placeholder="Alt görev başlığı..."
+              className="input"
+              style={{flex: 1}}
+              onKeyDown={e => e.key === 'Enter' && addSubtask()}
+            />
+            <button 
+              className="btn primary" 
+              disabled={!subtaskTitle.trim() || addingSubtask}
+              onClick={addSubtask}
+            >
+              {addingSubtask ? 'Ekleniyor...' : 'Ekle'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Recurring Task Section */}
+      <div className="recurring-block card">
+        <h3>Tekrarlama Ayarları</h3>
+        <div style={{display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap'}}>
+          <div style={{display: 'flex', gap: 6, alignItems: 'center'}}>
+            <label style={{fontSize: '.8rem', fontWeight: 500}}>Tip:</label>
+            <select 
+              value={recurringType} 
+              onChange={e => setRecurringType(e.target.value)}
+              className="input" 
+              style={{padding: '6px 8px', fontSize: '.8rem'}}
+            >
+              <option value="none">Tekrarlanmaz</option>
+              <option value="daily">Günlük</option>
+              <option value="weekly">Haftalık</option>
+              <option value="monthly">Aylık</option>
+            </select>
+          </div>
+          
+          {recurringType !== 'none' && (
+            <div style={{display: 'flex', gap: 6, alignItems: 'center'}}>
+              <label style={{fontSize: '.8rem', fontWeight: 500}}>Her:</label>
+              <input 
+                type="number" 
+                value={recurringInterval} 
+                onChange={e => setRecurringInterval(parseInt(e.target.value) || 1)}
+                min="1" 
+                max="30"
+                className="input" 
+                style={{width: '60px', padding: '6px 8px', fontSize: '.8rem'}}
+              />
+              <span style={{fontSize: '.8rem', color: 'var(--text-dim)'}}>
+                {recurringType === 'daily' ? 'gün' : recurringType === 'weekly' ? 'hafta' : 'ay'}
+              </span>
+            </div>
+          )}
+          
+          <button 
+            className="btn xs" 
+            onClick={updateRecurring}
+            style={{marginLeft: 'auto'}}
+          >
+            Kaydet
+          </button>
+        </div>
+        
+        {todo.recurring && (
+          <div style={{marginTop: 8, padding: '8px 12px', background: 'var(--input-bg)', borderRadius: 8, fontSize: '.75rem', color: 'var(--text-dim)'}}>
+            ℹ️ Bu görev {todo.recurring.type === 'daily' ? 'her gün' : todo.recurring.type === 'weekly' ? 'her hafta' : 'her ay'} otomatik olarak oluşturulacak
+          </div>
+        )}
+      </div>
+      
+      <div 
+        className="notes-block card" 
+        style={todo.banner? {
+          backgroundImage: `url(${todo.banner.path})`,
+          backgroundSize: 'cover',
+          backgroundPosition: `center ${todo.bannerOffset || 0}px`,
+          backgroundAttachment: 'fixed'
+        } : undefined}
+      >
+        <div className="notes-content">
+          <h3>Notlar</h3>
+          {todo.notes?.length? (
           <ul className="notes list">
             {todo.notes.map((n,i)=>(
               <li key={i} className={classNames('note-line', n.type==='task' && 'note-task', n.type==='task' && n.done && 'done')}>
@@ -278,6 +440,7 @@ function NoteDetail({ todo, index, back, refresh, workspace = 'default', dateKey
           <div className="note-actions">
             <button className="btn primary" disabled={!note.trim()||saving} onClick={add}>{saving? 'Kaydediliyor...' : 'Ekle'}</button>
           </div>
+        </div>
         </div>
       </div>
       <div className="card" style={{fontSize:'.7rem',lineHeight:1.5}}>
@@ -311,6 +474,11 @@ export function TodoApp(){
   const [stats,setStats]=useState({ total:0, completed:0, archived:0, todayCompleted:0, last7:[] });
   const [quickOpen,setQuickOpen]=useState(false);
   const [quickTitle,setQuickTitle]=useState('');
+  
+  // Drag & Drop states
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   
   // Date navigation states
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -348,6 +516,54 @@ export function TodoApp(){
     setTodos(list);
     setLoading(false);
   }
+  
+  // Drag & Drop handlers
+  const handleDragStart = (e, todoIndex) => {
+    setDraggedItem({ index: todoIndex, workspace: activeWs, date: selectedDate });
+    setIsDragging(true);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', todoIndex);
+    
+    // Visual feedback
+    e.target.style.opacity = '0.5';
+  };
+  
+  const handleDragEnd = (e) => {
+    setDraggedItem(null);
+    setDragOverIndex(null);
+    setIsDragging(false);
+    e.target.style.opacity = '1';
+  };
+  
+  const handleDragOver = (e, targetIndex) => {
+    e.preventDefault();
+    setDragOverIndex(targetIndex);
+    e.dataTransfer.dropEffect = 'move';
+  };
+  
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+  
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    
+    if (!draggedItem || draggedItem.index === targetIndex) {
+      setIsDragging(false);
+      return;
+    }
+    
+    // Reorder todos
+    try {
+      await window.api.reorderTodos(draggedItem.index, targetIndex, activeWs, selectedDate);
+      await load(); // Refresh the list
+    } catch (error) {
+      console.error('Drag & drop failed:', error);
+    }
+    
+    setIsDragging(false);
+  };
   
   const isToday = (dateKey) => {
     const today = new Date();
@@ -479,11 +695,11 @@ export function TodoApp(){
     }
     window.addEventListener('keydown', handler);
     return ()=>window.removeEventListener('keydown', handler);
-  },[title,inDetail,todos]);
+  },[title,inDetail,todos,addTodo]);
 
   return (
     <div className={classNames('app-shell','column')}>
-  <TargetCursor hideDefaultCursor={true} spinDuration={2} />
+  <TargetCursor />
       <div className="window-bar" data-drag-region>
         <div className="window-drag" />
         <div className="win-buttons">
@@ -518,6 +734,7 @@ export function TodoApp(){
 
           {/* Date Navigation Bar */}
           <div className="date-nav-bar">
+            <ThemeToggle />
             <button 
               className="btn xs" 
               onClick={() => {
@@ -635,18 +852,43 @@ export function TodoApp(){
                     {group.todos.map((t, todoIndex) => {
                       const originalIndex = filteredTodos.find(({t: todo}) => todo === t)?.i || 0;
                       return (
-                        <li key={originalIndex} className={classNames('todo-item','card', t.completed && 'completed')}>
-                          <div className="title-row cursor-target" onClick={()=>setDetailIndex(originalIndex)} style={{cursor:'pointer',flex:1}}>
+                        <li 
+                          key={originalIndex} 
+                          className={classNames(
+                            'todo-item',
+                            'card', 
+                            t.completed && 'completed',
+                            isDragging && draggedItem?.index === originalIndex && 'dragging',
+                            dragOverIndex === originalIndex && 'drag-over'
+                          )}
+                          draggable={!t.completed}
+                          onDragStart={(e) => handleDragStart(e, originalIndex)}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={(e) => handleDragOver(e, originalIndex)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, originalIndex)}
+                        >
+                          <div className="drag-handle" style={{
+                            cursor: t.completed ? 'default' : 'grab',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: '#666',
+                            marginRight: '8px'
+                          }}>
+                            {!t.completed && '⋮⋮'}
+                          </div><div className="title-row cursor-target" onClick={()=>setDetailIndex(originalIndex)} style={{cursor:'pointer',flex:1}}>
                             <span className="badge">{originalIndex+1}</span>
                             <span className="title-text" style={t.completed? {textDecoration:'line-through',opacity:.6}:undefined}>{t.title}</span>
                             <span className={classNames('prio', t.priority==='low' && 'low', t.priority==='med' && 'med', t.priority==='high' && 'high')} style={{marginLeft:8}}>{t.priority}</span>
                             {t.dueDate && <span className={classNames('due', (new Date(t.dueDate) < new Date() && !t.completed) && 'overdue')}>{t.dueDate}</span>}
                             {t.tags?.length>0 && (
                               <span style={{display:'flex',gap:4,flexWrap:'wrap',marginLeft:6}}>
-                                {t.tags.slice(0,3).map(tag=> <span key={tag} style={{background:'#1d2633',padding:'2px 6px',borderRadius:6,fontSize:'.55rem',opacity:.8}}>#{tag}</span>)}
+                                {t.tags.slice(0,3).map(tag=> <span key={tag} className="tag-badge">#{tag}</span>)}
                                 {t.tags.length>3 && <span style={{fontSize:'.55rem',opacity:.6}}>+{t.tags.length-3}</span>}
                               </span>
                             )}
+                            {t.recurring && <span className="recurring-indicator">{t.recurring.type}</span>}
                             {t.archived && <span style={{marginLeft:6,fontSize:'.55rem',color:'#888'}}>ARCH</span>}
                           </div>
                           <div style={{display:'flex',gap:6}}>
@@ -663,6 +905,17 @@ export function TodoApp(){
                                 </li>
                               ))}
                             </ul>
+                          )}
+                          {t.subtasks?.length > 0 && (
+                            <div className="subtask-preview">
+                              <span>Alt görevler:</span>
+                              <div className="subtask-mini-progress">
+                                <div className="progress-fill" style={{
+                                  width: `${((t.subtasks.filter(s => s.completed).length / t.subtasks.length) * 100)}%`
+                                }} />
+                              </div>
+                              <span>{t.subtasks.filter(s => s.completed).length}/{t.subtasks.length}</span>
+                            </div>
                           )}
                         </li>
                       );
@@ -687,7 +940,6 @@ export function TodoApp(){
         </div>
       )}
       <footer className="app-footer">Yerel olarak kaydedilir • {new Date().toLocaleDateString('tr-TR')}</footer>
-      <ThemeToggle />
       <div style={{position:'fixed',bottom:4,right:6,fontSize:'.55rem',opacity:.75,background:'var(--input-bg)',border:'1px solid var(--border)',color:'var(--text-dim)',padding:'6px 10px',borderRadius:8,lineHeight:1.4}}>
         <strong>İstatistik</strong><br/>
         Toplam: {stats.total} • Tamamlanan: {stats.completed} • Arşivli: {stats.archived}
